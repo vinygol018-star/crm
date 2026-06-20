@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -5,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Send, 
-  Users, 
+  MessageSquareQuote, 
   Calendar, 
   TrendingUp, 
   AlertCircle, 
@@ -19,6 +20,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
   { label: 'Leads Enviados', icon: Send, href: '/leads' },
+  { label: 'Leads Respondidos', icon: MessageSquareQuote, href: '/replied' },
   { label: 'Reuniões', icon: Calendar, href: '/meetings' },
   { label: 'Vendas', icon: TrendingUp, href: '/sales' },
   { label: 'Urgência', icon: AlertCircle, href: '/urgency', variant: 'destructive' },
@@ -32,7 +34,7 @@ export function CRMSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 border-r border-border bg-sidebar flex flex-col h-screen sticky top-0">
+    <aside className="w-64 border-r border-border bg-sidebar flex flex-col h-screen sticky top-0 shrink-0">
       <div className="p-6">
         <h1 className="text-2xl font-headline font-bold text-primary flex items-center gap-2">
           FluxFlow <span className="text-xs px-2 py-0.5 bg-primary/10 rounded-full">CRM</span>

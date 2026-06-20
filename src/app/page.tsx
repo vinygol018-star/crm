@@ -1,3 +1,4 @@
+
 "use client";
 
 import { CRMLayout } from '@/components/layout/crm-layout';
@@ -5,13 +6,13 @@ import { useCRM } from '@/lib/crm-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Users, 
-  Send, 
   MessageSquare, 
   Calendar, 
   CheckCircle2, 
   TrendingUp, 
   AlertTriangle,
-  History
+  Flame,
+  MessageSquareQuote
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -30,60 +31,71 @@ import { differenceInDays, parseISO } from 'date-fns';
 export default function Dashboard() {
   const { leads, sales, meetings } = useCRM();
 
-  // Metric calculations
+  // Metrics
   const totalLeads = leads.length;
-  const leadsSent = leads.filter(l => l.status === 'Mensagem enviada').length;
-  const leadsResponded = leads.filter(l => !['Mensagem enviada', 'Não respondeu', 'Remover do CRM'].includes(l.status)).length;
-  const leadsNoResponse = leads.filter(l => l.status === 'Não respondeu').length;
-  const totalMeetings = meetings.length;
-  const totalSalesCount = sales.length;
-  const totalLost = leads.filter(l => l.status === 'Não vendido').length;
-  const totalRevenue = sales.reduce((acc, s) => acc + s.amount, 0);
+  const leadsReplied = leads.filter(l => l.status === 'Respondeu').length;
+  const leadsMeetings = leads.filter(l => l.status === 'Reunião marcada').length;
+  const leadsClosed = leads.filter(l => l.status === 'Venda fechada').length;
+  const leadsLost = leads.filter(l => l.status === 'Não vendido').length;
   
+  const level1Count = leads.filter(l => l.responseLevel === 'Nível 1 — Respondeu pouco').length;
+  const level2Count = leads.filter(l => l.responseLevel === 'Nível 2 — Em conversa').length;
+  const level3Count = leads.filter(l => l.responseLevel === 'Nível 3 — Quente').length;
+
   const urgentLeadsCount = leads.filter(l => {
     if (['Venda fechada', 'Não vendido', 'Remover do CRM'].includes(l.status)) return false;
     const lastDate = l.lastFollowUpAt ? parseISO(l.lastFollowUpAt) : parseISO(l.sentAt);
     return differenceInDays(new Date(), lastDate) >= 4;
   }).length;
 
-  const responseRate = totalLeads > 0 ? (leadsResponded / totalLeads) * 100 : 0;
-  const meetingRate = leadsResponded > 0 ? (totalMeetings / leadsResponded) * 100 : 0;
-  const conversionRate = totalMeetings > 0 ? (totalSalesCount / totalMeetings) * 100 : 0;
+  const totalRevenue = sales.reduce((acc, s) => acc + s.amount, 0);
 
-  // Chart Data
-  const statusData = [
-    { name: 'Sent', value: leads.filter(l => l.status === 'Mensagem enviada').length },
-    { name: 'Replied', value: leads.filter(l => l.status === 'Respondeu primeiro contato').length },
-    { name: 'Meeting', value: leads.filter(l => l.status === 'Reunião marcada').length },
-    { name: 'Closed', value: leads.filter(l => l.status === 'Venda fechada').length },
-    { name: 'Lost', value: leads.filter(l => l.status === 'Não vendido').length },
+  // Rates
+  const responseRate = totalLeads > 0 ? (leadsReplied / totalLeads) * 100 : 0;
+  const hotRate = leadsReplied > 0 ? (level3Count / leadsReplied) * 100 : 0;
+  const meetingRate = leadsReplied > 0 ? (leadsMeetings / leadsReplied) * 100 : 0;
+  const conversionRate = leadsMeetings > 0 ? (leadsClosed / leadsMeetings) * 100 : 0;
+
+  // Charts
+  const funnelData = [
+    { name: 'Enviados', value: leads.filter(l => ['Mensagem enviada', 'Não respondeu'].includes(l.status)).length },
+    { name: 'Respondidos', value: leadsReplied },
+    { name: 'Reuniões', value: leadsMeetings },
+    { name: 'Vendas', value: leadsClosed },
   ];
 
-  const COLORS = ['#1A73E8', '#5C6BC0', '#9575CD', '#4CAF50', '#F44336'];
+  const COLORS = ['#3B82F6', '#818CF8', '#A78BFA', '#10B981'];
 
   const metrics = [
     { label: 'Total Leads', value: totalLeads, icon: Users, color: 'text-blue-400' },
-    { label: 'Respostas', value: leadsResponded, icon: MessageSquare, color: 'text-indigo-400' },
-    { label: 'Reuniões', value: totalMeetings, icon: Calendar, color: 'text-violet-400' },
-    { label: 'Vendas', value: totalSalesCount, icon: CheckCircle2, color: 'text-green-400' },
+    { label: 'Respondidos', value: leadsReplied, icon: MessageSquareQuote, color: 'text-indigo-400' },
+    { label: 'Leads Quentes', value: level3Count, icon: Flame, color: 'text-orange-500' },
+    { label: 'Reuniões', value: leadsMeetings, icon: Calendar, color: 'text-violet-400' },
+    { label: 'Vendas', value: leadsClosed, icon: CheckCircle2, color: 'text-green-400' },
     { label: 'Faturamento', value: `R$ ${totalRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-400' },
-    { label: 'Urgência', value: urgentLeadsCount, icon: AlertTriangle, color: 'text-red-400' },
   ];
 
   return (
     <CRMLayout>
       <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-        <div>
-          <h2 className="text-3xl font-headline font-bold">Dashboard Geral</h2>
-          <p className="text-muted-foreground">Bem-vindo à sua central de operações comercial.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-headline font-bold">Dashboard Comercial</h2>
+            <p className="text-muted-foreground">Monitoramento em tempo real do seu funil de vendas.</p>
+          </div>
+          {urgentLeadsCount > 0 && (
+            <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+              <span className="text-sm font-bold text-red-500">{urgentLeadsCount} leads urgentes</span>
+            </div>
+          )}
         </div>
 
-        {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {metrics.map((m) => (
             <Card key={m.label} className="bg-card border-border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{m.label}</CardTitle>
+                <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{m.label}</CardTitle>
                 <m.icon className={`w-4 h-4 ${m.color}`} />
               </CardHeader>
               <CardContent>
@@ -93,54 +105,41 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Stats & KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Taxa de Resposta</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center pt-2">
-              <div className="text-4xl font-bold text-blue-400">{responseRate.toFixed(1)}%</div>
-              <p className="text-xs text-muted-foreground mt-2">de leads que responderam</p>
-            </CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="bg-card border-border flex flex-col justify-center items-center py-6">
+            <p className="text-xs text-muted-foreground uppercase font-bold">Taxa de Resposta</p>
+            <div className="text-3xl font-bold text-blue-400 mt-2">{responseRate.toFixed(1)}%</div>
           </Card>
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Taxa de Reunião</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center pt-2">
-              <div className="text-4xl font-bold text-violet-400">{meetingRate.toFixed(1)}%</div>
-              <p className="text-xs text-muted-foreground mt-2">de respostas viraram reuniões</p>
-            </CardContent>
+          <Card className="bg-card border-border flex flex-col justify-center items-center py-6">
+            <p className="text-xs text-muted-foreground uppercase font-bold">Leads Quentes</p>
+            <div className="text-3xl font-bold text-orange-500 mt-2">{hotRate.toFixed(1)}%</div>
           </Card>
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Taxa de Conversão</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center pt-2">
-              <div className="text-4xl font-bold text-green-400">{conversionRate.toFixed(1)}%</div>
-              <p className="text-xs text-muted-foreground mt-2">de reuniões viraram vendas</p>
-            </CardContent>
+          <Card className="bg-card border-border flex flex-col justify-center items-center py-6">
+            <p className="text-xs text-muted-foreground uppercase font-bold">Taxa de Reunião</p>
+            <div className="text-3xl font-bold text-violet-400 mt-2">{meetingRate.toFixed(1)}%</div>
+          </Card>
+          <Card className="bg-card border-border flex flex-col justify-center items-center py-6">
+            <p className="text-xs text-muted-foreground uppercase font-bold">Conversão Real</p>
+            <div className="text-3xl font-bold text-green-400 mt-2">{conversionRate.toFixed(1)}%</div>
           </Card>
         </div>
 
-        {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Status dos Leads</CardTitle>
+              <CardTitle className="text-lg">Volume do Funil</CardTitle>
             </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={statusData}>
+                <BarChart data={funnelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#2D2E32" vertical={false} />
-                  <XAxis dataKey="name" stroke="#666" />
-                  <YAxis stroke="#666" />
+                  <XAxis dataKey="name" stroke="#666" fontSize={12} />
+                  <YAxis stroke="#666" fontSize={12} />
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#16181D', border: '1px solid #2D2E32' }}
                     itemStyle={{ color: '#fff' }}
                   />
-                  <Bar dataKey="value" fill="#1A73E8" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -148,13 +147,17 @@ export default function Dashboard() {
 
           <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Distribuição do Funil</CardTitle>
+              <CardTitle className="text-lg">Composição Respondidos</CardTitle>
             </CardHeader>
             <CardContent className="h-[300px] flex justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={statusData}
+                    data={[
+                      { name: 'Nível 1', value: level1Count },
+                      { name: 'Nível 2', value: level2Count },
+                      { name: 'Nível 3', value: level3Count },
+                    ]}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -162,9 +165,9 @@ export default function Dashboard() {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
+                    <Cell fill="#60A5FA" />
+                    <Cell fill="#818CF8" />
+                    <Cell fill="#F97316" />
                   </Pie>
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#16181D', border: '1px solid #2D2E32' }}

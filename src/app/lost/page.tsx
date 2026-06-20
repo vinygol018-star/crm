@@ -1,3 +1,4 @@
+
 "use client";
 
 import { CRMLayout } from '@/components/layout/crm-layout';
@@ -63,7 +64,7 @@ export default function LostLeadsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs italic">
-                      {lead.notes}
+                      {lead.notes || 'Sem observações registradas.'}
                     </TableCell>
                   </TableRow>
                 ))

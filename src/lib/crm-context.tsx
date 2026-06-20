@@ -1,8 +1,9 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Lead, Meeting, Sale, OperationConfig, LeadStatus, MeetingStatus } from './types';
-import { addDays, differenceInDays, isAfter, parseISO } from 'date-fns';
+import { Lead, Meeting, Sale, OperationConfig, LeadStatus, ResponseLevel, MeetingStatus } from './types';
+import { addDays, parseISO } from 'date-fns';
 
 interface CRMContextType {
   leads: Lead[];
@@ -24,16 +25,15 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [config, setConfig] = useState<OperationConfig>({
-    services: ['Gestão de Tráfego', 'Social Media', 'Site/LP', 'Copywriting'],
-    niches: ['E-commerce', 'Infoproduto', 'Local Business', 'Real Estate'],
-    operationName: 'FluxFlow CRM Default',
+    services: ['Gestão de Tráfego', 'Social Media', 'Site/LP', 'Copywriting', 'Automação', 'CRM'],
+    niches: ['Academia', 'Estética', 'Clínica', 'Restaurante', 'Loja de Roupa', 'E-commerce', 'Infoproduto'],
+    operationName: 'FluxFlow CRM',
     defaultServiceValue: 1500,
   });
 
-  // Calculate follow-up dates based on level
   const calculateNextFollowUp = (level: number, fromDate: string) => {
     const baseDate = parseISO(fromDate);
-    const intervals = [1, 2, 5, 7]; // F1: +1d, F2: +2d, F3: +5d, F4: +7d
+    const intervals = [1, 2, 5, 7];
     if (level >= intervals.length) return undefined;
     return addDays(baseDate, intervals[level]).toISOString();
   };
@@ -57,7 +57,6 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
         if (l.id === id) {
           const updated = { ...l, ...updates };
           
-          // Automatic Movement logic
           if (updates.status === 'Reunião marcada' && l.status !== 'Reunião marcada') {
             const meetingId = Math.random().toString(36).substr(2, 9);
             setMeetings(m => [...m, {
@@ -66,8 +65,21 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
               scheduledAt: new Date().toISOString(),
               status: 'Reunião marcada',
               notes: '',
-              potentialValue: l.potentialValue
+              potentialValue: updated.potentialValue
             }]);
+          }
+          
+          if (updates.status === 'Venda fechada' && l.status !== 'Venda fechada') {
+            // Se for fechado direto pelo lead sem passar por meeting
+            if (!sales.some(s => s.leadId === id)) {
+              closeSale(id, {
+                customerName: updated.name,
+                amount: updated.potentialValue || config.defaultServiceValue,
+                paymentMethod: 'Não especificado',
+                paymentStatus: 'Pendente',
+                notes: 'Venda direta'
+              });
+            }
           }
           
           return updated;
@@ -108,14 +120,14 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
 
   const updateMeeting = (meetingId: string, updates: Partial<Meeting>) => {
     setMeetings(prev => prev.map(m => m.id === meetingId ? { ...m, ...updates } : m));
-    
-    // Sync status to lead if necessary
     const meeting = meetings.find(m => m.id === meetingId);
     if (meeting && updates.status) {
       if (updates.status === 'Venda fechada') {
-        // Logic for sale closure handled in closeSale or here
+         // Já tratado em closeSale
+      } else if (updates.status === 'Não vendido') {
+         updateLead(meeting.leadId, { status: 'Não vendido' });
       } else {
-        updateLead(meeting.leadId, { status: updates.status as unknown as LeadStatus });
+         updateLead(meeting.leadId, { status: 'Reunião marcada' });
       }
     }
   };

@@ -1,12 +1,19 @@
+
 export type LeadStatus = 
   | 'Mensagem enviada'
   | 'Não respondeu'
-  | 'Respondeu primeiro contato'
-  | 'Em conversa'
+  | 'Aguardando resposta'
+  | 'Follow-up pendente'
+  | 'Respondeu'
   | 'Reunião marcada'
   | 'Venda fechada'
   | 'Não vendido'
   | 'Remover do CRM';
+
+export type ResponseLevel = 
+  | 'Nível 1 — Respondeu pouco'
+  | 'Nível 2 — Em conversa'
+  | 'Nível 3 — Quente';
 
 export type MeetingStatus =
   | 'Reunião marcada'
@@ -27,6 +34,7 @@ export interface Lead {
   service: string;
   sentAt: string;
   status: LeadStatus;
+  responseLevel?: ResponseLevel;
   followUpLevel: number; // 0 to 4
   notes: string;
   lastFollowUpAt?: string;

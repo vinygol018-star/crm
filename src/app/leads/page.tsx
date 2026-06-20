@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -28,21 +29,29 @@ import {
   Instagram, 
   MessageCircle, 
   CalendarClock,
-  Sparkles
+  Sparkles,
+  Edit2
 } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
-import { LeadStatus } from '@/lib/types';
+import { LeadStatus, Lead } from '@/lib/types';
 import { generateFollowUpMessage } from '@/ai/flows/generate-follow-up-message-flow';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { LeadEditDialog } from '@/components/crm/lead-edit-dialog';
 
 export default function LeadsPage() {
   const { leads, updateLead, markFollowUpDone } = useCRM();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'All'>('All');
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const { toast } = useToast();
 
+  const allowedStatuses = ['Mensagem enviada', 'Não respondeu', 'Aguardando resposta', 'Follow-up pendente'];
+
   const filteredLeads = leads.filter(l => {
+    const isInBaseTab = allowedStatuses.includes(l.status);
+    if (!isInBaseTab) return false;
+
     const matchesSearch = 
       l.name.toLowerCase().includes(search.toLowerCase()) ||
       l.instagram.toLowerCase().includes(search.toLowerCase()) ||
@@ -59,10 +68,6 @@ export default function LeadsPage() {
     return 'text-muted-foreground';
   };
 
-  const handleStatusChange = (id: string, newStatus: LeadStatus) => {
-    updateLead(id, { status: newStatus });
-  };
-
   const handleAIFollowUp = async (lead: any) => {
     try {
       const result = await generateFollowUpMessage({
@@ -71,14 +76,9 @@ export default function LeadsPage() {
         serviceOffered: lead.service,
         interactionHistory: lead.notes || "Iniciou contato agora."
       });
-      
       alert(`Mensagem Sugerida:\n\n${result.message}`);
     } catch (error) {
-      toast({
-        title: "Erro na IA",
-        description: "Não foi possível gerar a mensagem agora.",
-        variant: "destructive"
-      });
+      toast({ title: "Erro na IA", description: "Não foi possível gerar a mensagem.", variant: "destructive" });
     }
   };
 
@@ -88,7 +88,7 @@ export default function LeadsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl font-headline font-bold">Leads Enviados</h2>
-            <p className="text-muted-foreground">Controle todos os contatos realizados.</p>
+            <p className="text-muted-foreground">Fase inicial: contatos realizados e follow-ups básicos.</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -104,16 +104,15 @@ export default function LeadsPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2">
                   <Filter className="w-4 h-4" />
-                  Status: {statusFilter}
+                  Status: {statusFilter === 'All' ? 'Todos' : statusFilter}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-card border-border">
-                <DropdownMenuItem onClick={() => setStatusFilter('All')}>Todos</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('All')}>Todos da aba</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setStatusFilter('Mensagem enviada')}>Mensagem enviada</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('Não respondeu')}>Não respondeu</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('Em conversa')}>Em conversa</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('Reunião marcada')}>Reunião marcada</DropdownMenuItem>
+                {allowedStatuses.map(s => (
+                  <DropdownMenuItem key={s} onClick={() => setStatusFilter(s as LeadStatus)}>{s}</DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -135,7 +134,7 @@ export default function LeadsPage() {
               {filteredLeads.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-48 text-center text-muted-foreground">
-                    Nenhum lead encontrado.
+                    Nenhum lead pendente nesta fase.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -161,22 +160,16 @@ export default function LeadsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={cn(
-                        "bg-opacity-10",
-                        lead.status === 'Venda fechada' && "bg-green-500 text-green-500 border-green-500",
-                        lead.status === 'Não vendido' && "bg-red-500 text-red-500 border-red-500",
-                        lead.status === 'Reunião marcada' && "bg-violet-500 text-violet-500 border-violet-500",
-                        lead.status === 'Mensagem enviada' && "bg-blue-500 text-blue-500 border-blue-500"
-                      )}>
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500">
                         {lead.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="text-xs font-medium uppercase tracking-tight text-muted-foreground">Level {lead.followUpLevel}</span>
+                        <span className="text-xs font-medium uppercase tracking-tight text-muted-foreground">F-{lead.followUpLevel}</span>
                         <span className="text-xs flex items-center gap-1 mt-1">
                           <CalendarClock className="w-3 h-3" />
-                          Próximo: {lead.nextFollowUpAt ? format(parseISO(lead.nextFollowUpAt), 'dd/MM') : 'Finalizado'}
+                          Próximo: {lead.nextFollowUpAt ? format(parseISO(lead.nextFollowUpAt), 'dd/MM') : 'N/A'}
                         </span>
                       </div>
                     </TableCell>
@@ -195,6 +188,13 @@ export default function LeadsPage() {
                         >
                           <Sparkles className="w-4 h-4" />
                         </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => setEditingLead(lead)}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -204,9 +204,9 @@ export default function LeadsPage() {
                           <DropdownMenuContent align="end" className="bg-card border-border">
                             <DropdownMenuItem onClick={() => markFollowUpDone(lead.id)}>Marcar Follow-up feito</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleStatusChange(lead.id, 'Em conversa')}>Mover para Conversa</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(lead.id, 'Reunião marcada')}>Marcar Reunião</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(lead.id, 'Não vendido')} className="text-destructive">Não Vendido</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingLead(lead)}>Alterar para Respondido</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => updateLead(lead.id, { status: 'Reunião marcada' })}>Marcar Reunião</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => updateLead(lead.id, { status: 'Não vendido' })} className="text-destructive">Não Vendido</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -218,6 +218,12 @@ export default function LeadsPage() {
           </Table>
         </div>
       </div>
+
+      <LeadEditDialog 
+        lead={editingLead} 
+        open={!!editingLead} 
+        onOpenChange={(open) => !open && setEditingLead(null)} 
+      />
     </CRMLayout>
   );
 }
