@@ -8,18 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { FileJson, ListPlus, CheckCircle } from 'lucide-react';
+import { ListPlus, CheckCircle } from 'lucide-react';
 
 export default function ImportPage() {
-  const { bulkAddLeads, config } = useCRM();
+  const { bulkAddLeads } = useCRM();
   const router = useRouter();
   const { toast } = useToast();
   
@@ -31,8 +25,8 @@ export default function ImportPage() {
   const handleImport = () => {
     if (!rawText || !defaultNiche || !defaultService) {
       toast({
-        title: "Erro",
-        description: "Preencha todos os campos e insira os dados dos leads.",
+        title: "Campos obrigatórios",
+        description: "Por favor, defina o nicho e serviço padrão, além de colar os dados dos leads.",
         variant: "destructive"
       });
       return;
@@ -41,7 +35,6 @@ export default function ImportPage() {
     setIsProcessing(true);
     
     try {
-      // Logic to parse lines like: Name | Instagram | Phone
       const lines = rawText.split('\n').filter(l => l.trim() !== '');
       const leadsToAdd = lines.map(line => {
         const parts = line.split('|').map(p => p.trim());
@@ -49,8 +42,9 @@ export default function ImportPage() {
           name: parts[0] || 'Desconhecido',
           instagram: parts[1] || '',
           phone: parts[2] || '',
-          niche: defaultNiche,
-          service: defaultService,
+          // Aplica o valor da linha se existir, caso contrário usa o padrão manual
+          niche: parts[3] || defaultNiche,
+          service: parts[4] || defaultService,
           sentAt: new Date().toISOString().split('T')[0],
           notes: 'Importado em massa.',
         };
@@ -59,15 +53,15 @@ export default function ImportPage() {
       bulkAddLeads(leadsToAdd);
       
       toast({
-        title: "Sucesso!",
-        description: `${leadsToAdd.length} leads importados com sucesso.`,
+        title: "Importação concluída",
+        description: `${leadsToAdd.length} leads foram adicionados com os padrões: ${defaultNiche} / ${defaultService}.`,
       });
       
       router.push('/leads');
     } catch (e) {
       toast({
         title: "Erro na importação",
-        description: "Verifique a formatação dos dados.",
+        description: "Verifique se a formatação dos dados segue o padrão: Nome | Instagram | WhatsApp",
         variant: "destructive"
       });
     } finally {
@@ -96,7 +90,7 @@ export default function ImportPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea 
-                className="min-h-[400px] font-mono text-sm bg-secondary"
+                className="min-h-[400px] font-mono text-sm bg-secondary border-border focus-visible:ring-primary"
                 placeholder="Exemplo:&#10;João Silva | @joao_trafego | 11999999999&#10;Maria Oliveira | @maria.mkt | 21988888888"
                 value={rawText}
                 onChange={e => setRawText(e.target.value)}
@@ -108,29 +102,28 @@ export default function ImportPage() {
             <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Configurações Base</CardTitle>
+                <CardDescription>Estes valores serão aplicados a todos os leads desta lista.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Nicho Padrão</Label>
-                  <Select onValueChange={setDefaultNiche}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {config.niches.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="default-niche">Nicho Padrão</Label>
+                  <Input 
+                    id="default-niche"
+                    placeholder="Ex: Academia, Estética, Clínica..." 
+                    className="bg-secondary border-border focus-visible:ring-primary"
+                    value={defaultNiche}
+                    onChange={e => setDefaultNiche(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>Serviço Padrão</Label>
-                  <Select onValueChange={setDefaultService}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {config.services.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="default-service">Serviço Padrão</Label>
+                  <Input 
+                    id="default-service"
+                    placeholder="Ex: Tráfego Pago, Social Media..." 
+                    className="bg-secondary border-border focus-visible:ring-primary"
+                    value={defaultService}
+                    onChange={e => setDefaultService(e.target.value)}
+                  />
                 </div>
               </CardContent>
             </Card>
