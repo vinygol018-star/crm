@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Configurações do Firebase utilizando variáveis de ambiente do Next.js.
+ * Todas as variáveis começam com NEXT_PUBLIC_ para estarem disponíveis no lado do cliente.
+ */
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
