@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { CRMSidebar } from './crm-sidebar';
 import { useCRM } from '@/lib/crm-context';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Terminal, HelpCircle } from 'lucide-react';
+import { AlertCircle, Terminal, HelpCircle, Cloud } from 'lucide-react';
 
 export function CRMLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
@@ -23,69 +23,54 @@ export function CRMLayout({ children }: { children: React.ReactNode }) {
   if (!isConfigured) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0A0C0E] p-4">
-        <div className="max-w-xl w-full space-y-4">
+        <div className="max-w-2xl w-full space-y-4">
           <Alert variant="destructive" className="bg-red-500/10 border-red-500/50">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle className="font-bold">Firebase não configurado</AlertTitle>
             <AlertDescription>
-              A persistência de dados está desativada. Adicione suas credenciais no arquivo <code>.env.local</code> para continuar.
+              A persistência de dados está desativada. As variáveis de ambiente do Firebase não foram encontradas.
             </AlertDescription>
           </Alert>
           
-          <div className="bg-card p-8 rounded-xl border border-border space-y-6 shadow-2xl">
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <Terminal className="w-5 h-5 text-primary" />
-              Guia de Configuração Rápida
-            </h3>
-            
-            <div className="space-y-4 text-sm text-muted-foreground">
-              <div className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">1</span>
-                <p>Acesse o <a href="https://console.firebase.google.com/" target="_blank" className="text-primary hover:underline">Firebase Console</a> e selecione seu projeto.</p>
-              </div>
-              
-              <div className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">2</span>
-                <p>Vá em <strong>Configurações do Projeto</strong> (ícone de engrenagem) &gt; <strong>Geral</strong>.</p>
-              </div>
-
-              <div className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">3</span>
-                <p>Em "Seus Apps", crie ou selecione um <strong>App Web (&lt;/&gt;)</strong>.</p>
-              </div>
-
-              <div className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">4</span>
-                <p>Copie os valores de <code>apiKey</code>, <code>authDomain</code>, etc., do objeto <code>firebaseConfig</code>.</p>
-              </div>
-
-              <div className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">5</span>
-                <div>
-                  <p>Crie o arquivo <code>.env.local</code> na raiz do projeto com o prefixo <strong>NEXT_PUBLIC_</strong>:</p>
-                  <pre className="mt-2 p-3 bg-secondary rounded-lg text-[10px] overflow-x-auto text-foreground">
-                    NEXT_PUBLIC_FIREBASE_API_KEY=...{"\n"}
-                    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...{"\n"}
-                    NEXT_PUBLIC_FIREBASE_PROJECT_ID=...{"\n"}
-                    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...{"\n"}
-                    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...{"\n"}
-                    NEXT_PUBLIC_FIREBASE_APP_ID=...
-                  </pre>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">6</span>
-                <p><strong>Reinicie o servidor</strong> de desenvolvimento para aplicar as mudanças.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-card p-6 rounded-xl border border-border space-y-4 shadow-2xl">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-primary" />
+                Local (.env.local)
+              </h3>
+              <div className="space-y-3 text-xs text-muted-foreground">
+                <p>Crie o arquivo na raiz do projeto e reinicie o servidor:</p>
+                <pre className="p-3 bg-secondary rounded-lg text-[9px] overflow-x-auto text-foreground border border-border">
+                  NEXT_PUBLIC_FIREBASE_API_KEY=...{"\n"}
+                  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...{"\n"}
+                  NEXT_PUBLIC_FIREBASE_PROJECT_ID=...{"\n"}
+                  NEXT_PUBLIC_FIREBASE_APP_ID=...
+                </pre>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-border">
-              <p className="text-xs flex items-center gap-2 text-muted-foreground">
-                <HelpCircle className="w-3 h-3" />
-                Certifique-se de ativar o Firestore e o Auth (E-mail/Senha) no painel do Firebase.
-              </p>
+            <div className="bg-card p-6 rounded-xl border border-primary/20 space-y-4 shadow-2xl">
+              <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                <Cloud className="w-5 h-5" />
+                Produção (Netlify)
+              </h3>
+              <div className="space-y-3 text-xs text-muted-foreground">
+                <p>Arquivos <code>.env.local</code> <strong>não funcionam</strong> em produção. Configure no painel:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Vá em <strong>Site configuration</strong></li>
+                  <li><strong>Environment variables</strong></li>
+                  <li>Adicione as chaves <code>NEXT_PUBLIC_FIREBASE_*</code></li>
+                  <li>Faça um novo deploy (Clear cache)</li>
+                </ol>
+              </div>
             </div>
+          </div>
+
+          <div className="pt-4 text-center">
+            <p className="text-xs flex items-center justify-center gap-2 text-muted-foreground">
+              <HelpCircle className="w-3 h-3" />
+              Consulte o arquivo NETLIFY_ENV_SETUP.md na raiz do projeto para o guia completo.
+            </p>
           </div>
         </div>
       </div>

@@ -22,6 +22,19 @@ export function initializeFirebase(): {
     firebaseConfig.apiKey.trim() !== ""
   );
 
+  // Safe logs para debug em produção (Netlify) sem expor as chaves
+  if (typeof window !== 'undefined') {
+    console.group('🛡️ FluxFlow CRM - Firebase Config Check');
+    console.log(`- Environment: ${process.env.NODE_ENV}`);
+    console.log(`- API Key: ${isConfigured ? '✅ Configurada' : '❌ Ausente'}`);
+    console.log(`- Project ID: ${!!firebaseConfig.projectId ? '✅ Configurado' : '❌ Ausente'}`);
+    console.log(`- Auth Domain: ${!!firebaseConfig.authDomain ? '✅ Configurado' : '❌ Ausente'}`);
+    if (!isConfigured && process.env.NODE_ENV === 'production') {
+      console.warn('⚠️ ATENÇÃO: Variáveis NEXT_PUBLIC_* não encontradas no ambiente de produção.');
+    }
+    console.groupEnd();
+  }
+
   if (!isConfigured) {
     return { firebaseApp: null, firestore: null, auth: null, isConfigured: false };
   }
