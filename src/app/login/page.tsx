@@ -1,19 +1,20 @@
-
 "use client";
 
 import { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useAuth } from '@/firebase';
+import { useAuth, useIsFirebaseConfigured } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock } from 'lucide-react';
+import { Lock, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const auth = useAuth();
+  const isConfigured = useIsFirebaseConfigured();
   const router = useRouter();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
@@ -22,7 +23,14 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth) return;
+    if (!auth) {
+      toast({ 
+        title: "Erro de Configuração", 
+        description: "O Firebase não está configurado corretamente.", 
+        variant: "destructive" 
+      });
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -52,7 +60,17 @@ export default function LoginPage() {
           <CardTitle className="text-3xl font-headline font-bold">FluxFlow CRM</CardTitle>
           <CardDescription>Acesse sua operação comercial</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {!isConfigured && (
+            <Alert variant="destructive" className="bg-red-500/10 border-red-500/50">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Configuração Pendente</AlertTitle>
+              <AlertDescription className="text-xs">
+                As variáveis de ambiente do Firebase não foram encontradas. O login não funcionará até que você as configure.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
@@ -64,6 +82,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-secondary"
+                disabled={!isConfigured}
               />
             </div>
             <div className="space-y-2">
@@ -75,12 +94,13 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="bg-secondary"
+                disabled={!isConfigured}
               />
             </div>
             <Button 
               type="submit" 
               className="w-full bg-primary text-white font-bold" 
-              disabled={isLoading}
+              disabled={isLoading || !isConfigured}
             >
               {isLoading ? "Entrando..." : "Acessar Sistema"}
             </Button>

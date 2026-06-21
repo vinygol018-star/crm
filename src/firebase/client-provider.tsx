@@ -11,10 +11,15 @@ export const FirebaseClientProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
   // Inicializa o Firebase apenas no cliente
-  const { firebaseApp, firestore, auth } = useMemo(() => initializeFirebase(), []);
+  const { firebaseApp, firestore, auth, isConfigured } = useMemo(() => initializeFirebase(), []);
 
   return (
-    <FirebaseProvider firebaseApp={firebaseApp} firestore={firestore} auth={auth}>
+    <FirebaseProvider 
+      firebaseApp={firebaseApp} 
+      firestore={firestore} 
+      auth={auth} 
+      isConfigured={isConfigured}
+    >
       {children}
     </FirebaseProvider>
   );

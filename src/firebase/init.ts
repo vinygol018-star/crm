@@ -7,16 +7,19 @@ import { firebaseConfig } from './config';
 
 /**
  * Inicializa as instâncias do Firebase no lado do cliente de forma segura.
+ * Retorna também um flag indicando se a configuração está presente.
  */
 export function initializeFirebase(): {
   firebaseApp: FirebaseApp | null;
   firestore: Firestore | null;
   auth: Auth | null;
+  isConfigured: boolean;
 } {
-  // Evita crash se as chaves de ambiente não estiverem configuradas
-  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "undefined") {
-    console.warn("Firebase API Key is missing. Please check your .env.local file.");
-    return { firebaseApp: null, firestore: null, auth: null };
+  const isConfigured = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== "undefined");
+
+  if (!isConfigured) {
+    console.warn("Firebase configuration is missing or invalid. Check your environment variables.");
+    return { firebaseApp: null, firestore: null, auth: null, isConfigured: false };
   }
 
   try {
@@ -24,9 +27,9 @@ export function initializeFirebase(): {
     const firestore = getFirestore(firebaseApp);
     const auth = getAuth(firebaseApp);
 
-    return { firebaseApp, firestore, auth };
+    return { firebaseApp, firestore, auth, isConfigured: true };
   } catch (error) {
     console.error("Error initializing Firebase:", error);
-    return { firebaseApp: null, firestore: null, auth: null };
+    return { firebaseApp: null, firestore: null, auth: null, isConfigured: false };
   }
 }
