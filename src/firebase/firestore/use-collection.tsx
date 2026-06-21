@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,11 +13,14 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
 
   useEffect(() => {
     if (!query) {
+      setData([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setError(null);
+
     const unsubscribe = onSnapshot(
       query,
       (snapshot: QuerySnapshot<T>) => {
@@ -28,6 +32,7 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
         setLoading(false);
       },
       (err) => {
+        console.error('onSnapshot Error:', err);
         const permissionError = new FirestorePermissionError({
           path: (query as any)._query?.path?.segments?.join('/') || 'unknown',
           operation: 'list',

@@ -4,8 +4,8 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { Lead, Meeting, Sale, OperationConfig } from './types';
 import { addDays, parseISO } from 'date-fns';
-import { useFirestore, useCollection, useDoc, useUser } from '@/firebase';
-import { collection, doc, setDoc, updateDoc, writeBatch, query, addDoc, onSnapshot } from 'firebase/firestore';
+import { useFirestore, useCollection, useDoc, useUser, useIsFirebaseConfigured } from '@/firebase';
+import { collection, doc, setDoc, updateDoc, writeBatch, query, addDoc, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
@@ -15,6 +15,8 @@ interface CRMContextType {
   sales: Sale[];
   config: OperationConfig;
   isLoading: boolean;
+  isFirestoreConnected: boolean;
+  dbError: string | null;
   addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'status' | 'followUpLevel' | 'nextFollowUpAt'>) => void;
   updateLead: (id: string, updates: Partial<Lead>) => void;
   bulkAddLeads: (leads: Omit<Lead, 'id' | 'createdAt' | 'status' | 'followUpLevel' | 'nextFollowUpAt'>[]) => void;
@@ -29,18 +31,18 @@ const CRMContext = createContext<CRMContextType | undefined>(undefined);
 export function CRMProvider({ children }: { children: React.ReactNode }) {
   const db = useFirestore();
   const { user } = useUser();
+  const isConfigured = useIsFirebaseConfigured();
   const [safetyTimeoutReached, setSafetyTimeoutReached] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
 
-  // Timeout para o progresso de carregamento dos dados
   useEffect(() => {
     const id = setTimeout(() => setSafetyTimeoutReached(true), 15000);
     return () => clearTimeout(id);
   }, []);
 
-  // Consultas ao Firestore - Fonte de verdade única e em tempo real
+  // Consultas ao Firestore - Fonte de verdade única
   const leadsQuery = useMemo(() => {
     if (!user || !db) return null;
-    console.log('CRM: Conectando à coleção de leads...');
     return query(collection(db, 'leads'));
   }, [db, user]);
 
@@ -48,15 +50,20 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   const salesQuery = useMemo(() => user && db ? query(collection(db, 'sales')) : null, [db, user]);
   const configDocRef = useMemo(() => user && db ? doc(db, 'config', 'main') : null, [db, user]);
 
-  const { data: rawLeads = [], loading: loadingLeads } = useCollection<Lead>(leadsQuery);
-  const { data: rawMeetings = [], loading: loadingMeetings } = useCollection<Meeting>(meetingsQuery);
-  const { data: rawSales = [], loading: loadingSales } = useCollection<Sale>(salesQuery);
-  const { data: configDoc, loading: loadingConfig } = useDoc<OperationConfig>(configDocRef);
+  const { data: rawLeads = [], loading: loadingLeads, error: errorLeads } = useCollection<Lead>(leadsQuery);
+  const { data: rawMeetings = [], loading: loadingMeetings, error: errorMeetings } = useCollection<Meeting>(meetingsQuery);
+  const { data: rawSales = [], loading: loadingSales, error: errorSales } = useCollection<Sale>(salesQuery);
+  const { data: configDoc, loading: loadingConfig, error: errorConfig } = useDoc<OperationConfig>(configDocRef);
 
-  // Ordenação manual dos leads por data de criação no cliente para garantir exibição consistente
-  // sem depender de índices complexos do Firestore que podem falhar se campos estiverem ausentes.
+  useEffect(() => {
+    const firstError = errorLeads || errorMeetings || errorSales || errorConfig;
+    if (firstError) {
+      setDbError(firstError.message);
+      console.error('CRM Firestore Sync Error:', firstError);
+    }
+  }, [errorLeads, errorMeetings, errorSales, errorConfig]);
+
   const leads = useMemo(() => {
-    console.log(`CRM: ${rawLeads.length} leads sincronizados do Firestore.`);
     return [...rawLeads].sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -86,11 +93,14 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addLead = (newLeadData: any) => {
-    if (!db) return;
+    if (!db || !user) {
+      console.error('Tentativa de salvar lead sem autenticação ou banco.');
+      return;
+    }
+    
     const leadsCollection = collection(db, 'leads');
     const now = new Date().toISOString();
     
-    // Usamos addDoc para garantir persistência real no Firestore com ID automático
     const data = {
       ...newLeadData,
       createdAt: now,
@@ -99,9 +109,11 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
       nextFollowUpAt: calculateNextFollowUp(0, newLeadData.sentAt || now),
     };
 
-    console.log('CRM: Salvando novo lead no Firestore...');
-    addDoc(leadsCollection, data).catch(async (e) => {
-      console.error('CRM: Falha ao salvar lead:', e);
+    console.log('Firestore: Salvando novo lead...');
+    addDoc(leadsCollection, data).then((docRef) => {
+      console.log('Firestore: Lead salvo com ID:', docRef.id);
+    }).catch(async (e) => {
+      console.error('Firestore Error:', e);
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: leadsCollection.path, 
         operation: 'create', 
@@ -111,12 +123,11 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateLead = (id: string, updates: Partial<Lead>) => {
-    if (!db) return;
+    if (!db || !user) return;
     const leadRef = doc(db, 'leads', id);
     
-    console.log(`CRM: Atualizando lead ${id} no Firestore...`);
-    updateDoc(leadRef, { ...updates, updatedAt: new Date().toISOString() }).catch(async (e) => {
-      console.error('CRM: Falha ao atualizar lead:', e);
+    console.log(`Firestore: Atualizando lead ${id}...`);
+    updateDoc(leadRef, { ...updates, updatedAt: serverTimestamp() as any }).catch(async (e) => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: leadRef.path, 
         operation: 'update', 
@@ -144,16 +155,15 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const bulkAddLeads = (newLeadsData: any[]) => {
-    if (!db) return;
+    if (!db || !user) return;
     const batch = writeBatch(db);
     const now = new Date().toISOString();
 
-    console.log(`CRM: Iniciando importação de ${newLeadsData.length} leads no Firestore...`);
+    console.log(`Firestore: Iniciando importação em lote de ${newLeadsData.length} leads...`);
     newLeadsData.forEach(data => {
       const leadRef = doc(collection(db, 'leads'));
       const leadData = {
         ...data,
-        id: leadRef.id,
         createdAt: now,
         status: 'Mensagem enviada',
         followUpLevel: 0,
@@ -163,9 +173,8 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     });
 
     batch.commit().then(() => {
-      console.log('CRM: Importação em massa concluída com sucesso.');
+      console.log('Firestore: Importação concluída.');
     }).catch(async (e) => {
-      console.error('CRM: Erro na importação em massa:', e);
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: 'leads', 
         operation: 'write',
@@ -175,7 +184,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const markFollowUpDone = (id: string) => {
-    if (!db) return;
+    if (!db || !user) return;
     const lead = leads.find(l => l.id === id);
     if (!lead) return;
 
@@ -187,7 +196,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
       followUpLevel: nextLevel,
       lastFollowUpAt: now,
       nextFollowUpAt: calculateNextFollowUp(nextLevel, now),
-      updatedAt: now
+      updatedAt: serverTimestamp() as any
     };
 
     updateDoc(leadRef, updates).catch(async (e) => {
@@ -200,9 +209,9 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateMeeting = (meetingId: string, updates: Partial<Meeting>) => {
-    if (!db) return;
+    if (!db || !user) return;
     const meetingRef = doc(db, 'meetings', meetingId);
-    updateDoc(meetingRef, updates).catch(async (e) => {
+    updateDoc(meetingRef, { ...updates, updatedAt: serverTimestamp() as any }).catch(async (e) => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: meetingRef.path, 
         operation: 'update', 
@@ -217,7 +226,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const closeSale = (leadId: string, saleData: any) => {
-    if (!db) return;
+    if (!db || !user) return;
     const salesCollection = collection(db, 'sales');
     const now = new Date().toISOString();
     
@@ -239,7 +248,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveConfig = (newConfig: OperationConfig) => {
-    if (!db) return;
+    if (!db || !user) return;
     const configRef = doc(db, 'config', 'main');
     setDoc(configRef, newConfig).catch(async (e) => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
@@ -251,11 +260,12 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const isLoading = !safetyTimeoutReached && (loadingLeads || loadingMeetings || loadingSales || loadingConfig) && !!db;
+  const isFirestoreConnected = !!db && !!user && !dbError;
 
   return (
     <CRMContext.Provider value={{ 
       leads, meetings, sales, config, 
-      isLoading,
+      isLoading, isFirestoreConnected, dbError,
       addLead, updateLead, bulkAddLeads, 
       markFollowUpDone, updateMeeting, closeSale,
       saveConfig

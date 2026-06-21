@@ -3,16 +3,21 @@
 
 import { CRMLayout } from '@/components/layout/crm-layout';
 import { useCRM } from '@/lib/crm-context';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useUser, useIsFirebaseConfigured } from '@/firebase';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { 
   Users, 
-  MessageSquare, 
   Calendar, 
   CheckCircle2, 
   TrendingUp, 
   AlertTriangle,
   Flame,
-  MessageSquareQuote
+  MessageSquareQuote,
+  ShieldCheck,
+  ShieldAlert,
+  Database,
+  Globe
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -27,16 +32,18 @@ import {
   Cell 
 } from 'recharts';
 import { differenceInDays, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 export default function Dashboard() {
-  const { leads, sales, meetings } = useCRM();
+  const { leads, sales, meetings, isFirestoreConnected, dbError } = useCRM();
+  const { user } = useUser();
+  const isConfigured = useIsFirebaseConfigured();
 
   // Metrics
   const totalLeads = leads.length;
   const leadsReplied = leads.filter(l => l.status === 'Respondeu').length;
   const leadsMeetings = leads.filter(l => l.status === 'Reunião marcada').length;
   const leadsClosed = leads.filter(l => l.status === 'Venda fechada').length;
-  const leadsLost = leads.filter(l => l.status === 'Não vendido').length;
   
   const level1Count = leads.filter(l => l.responseLevel === 'Nível 1 — Respondeu pouco').length;
   const level2Count = leads.filter(l => l.responseLevel === 'Nível 2 — Em conversa').length;
@@ -64,8 +71,6 @@ export default function Dashboard() {
     { name: 'Vendas', value: leadsClosed },
   ];
 
-  const COLORS = ['#3B82F6', '#818CF8', '#A78BFA', '#10B981'];
-
   const metrics = [
     { label: 'Total Leads', value: totalLeads, icon: Users, color: 'text-blue-400' },
     { label: 'Respondidos', value: leadsReplied, icon: MessageSquareQuote, color: 'text-indigo-400' },
@@ -78,18 +83,48 @@ export default function Dashboard() {
   return (
     <CRMLayout>
       <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl font-headline font-bold">Dashboard Comercial</h2>
             <p className="text-muted-foreground">Monitoramento em tempo real do seu funil de vendas.</p>
           </div>
-          {urgentLeadsCount > 0 && (
-            <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-500" />
-              <span className="text-sm font-bold text-red-500">{urgentLeadsCount} leads urgentes</span>
-            </div>
-          )}
+          
+          <div className="flex flex-wrap gap-2">
+            {urgentLeadsCount > 0 && (
+              <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-500" />
+                <span className="text-sm font-bold text-red-500">{urgentLeadsCount} urgentes</span>
+              </div>
+            )}
+            
+            <Card className="bg-secondary/40 border-border px-3 py-1 flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <Globe className={cn("w-3.5 h-3.5", isConfigured ? "text-green-500" : "text-red-500")} />
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">Config</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className={cn("w-3.5 h-3.5", !!user ? "text-green-500" : "text-red-500")} />
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">Auth</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Database className={cn("w-3.5 h-3.5", isFirestoreConnected ? "text-green-500" : "text-red-500")} />
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">Cloud</span>
+              </div>
+            </Card>
+          </div>
         </div>
+
+        {dbError && (
+          <Card className="bg-destructive/10 border-destructive border">
+            <CardHeader className="flex flex-row items-center gap-3 p-4">
+              <ShieldAlert className="text-destructive w-5 h-5" />
+              <div>
+                <CardTitle className="text-sm">Erro de Sincronização Firestore</CardTitle>
+                <CardDescription className="text-xs text-destructive/80 font-mono">{dbError}</CardDescription>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {metrics.map((m) => (
