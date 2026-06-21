@@ -1,0 +1,73 @@
+
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "Representa um lead no funil de vendas",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nome do lead" },
+        "instagram": { "type": "string" },
+        "phone": { "type": "string" },
+        "niche": { "type": "string" },
+        "service": { "type": "string" },
+        "status": { "type": "string" },
+        "responseLevel": { "type": "string" },
+        "followUpLevel": { "type": "number" },
+        "notes": { "type": "string" },
+        "sentAt": { "type": "string" },
+        "lastFollowUpAt": { "type": "string" },
+        "nextFollowUpAt": { "type": "string" },
+        "potentialValue": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Meeting": {
+      "title": "Meeting",
+      "description": "Reunião agendada com um lead",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string" },
+        "scheduledAt": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "potentialValue": { "type": "number" }
+      }
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Venda concretizada",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "amount": { "type": "number" },
+        "soldAt": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "OperationConfig": {
+      "title": "OperationConfig",
+      "description": "Configurações globais da operação",
+      "type": "object",
+      "properties": {
+        "services": { "type": "array", "items": { "type": "string" } },
+        "niches": { "type": "array", "items": { "type": "string" } },
+        "operationName": { "type": "string" },
+        "defaultServiceValue": { "type": "number" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["email"]
+  },
+  "firestore": {
+    "/leads/{leadId}": { "schema": "Lead", "description": "Coleção de leads ativos" },
+    "/meetings/{meetingId}": { "schema": "Meeting", "description": "Histórico de reuniões" },
+    "/sales/{saleId}": { "schema": "Sale", "description": "Histórico de vendas" },
+    "/config/main": { "schema": "OperationConfig", "description": "Configuração única do sistema" }
+  }
+}

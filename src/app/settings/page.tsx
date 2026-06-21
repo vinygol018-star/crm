@@ -1,22 +1,54 @@
+
 "use client";
 
+import { useState, useEffect } from 'react';
 import { CRMLayout } from '@/components/layout/crm-layout';
 import { useCRM } from '@/lib/crm-context';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { 
   Plus, 
   Trash2, 
-  Save,
   Building,
   Target,
   Briefcase
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SettingsPage() {
-  const { config } = useCRM();
+  const { config, saveConfig } = useCRM();
+  const { toast } = useToast();
+  const [localConfig, setLocalConfig] = useState(config);
+
+  useEffect(() => {
+    setLocalConfig(config);
+  }, [config]);
+
+  const handleSave = () => {
+    saveConfig(localConfig);
+    toast({ title: "Configurações salvas", description: "As mudanças foram aplicadas com sucesso." });
+  };
+
+  const addNiche = (niche: string) => {
+    if (!niche) return;
+    setLocalConfig(prev => ({ ...prev, niches: [...prev.niches, niche] }));
+  };
+
+  const addService = (service: string) => {
+    if (!service) return;
+    setLocalConfig(prev => ({ ...prev, services: [...prev.services, service] }));
+  };
+
+  const removeNiche = (niche: string) => {
+    setLocalConfig(prev => ({ ...prev, niches: prev.niches.filter(n => n !== niche) }));
+  };
+
+  const removeService = (service: string) => {
+    setLocalConfig(prev => ({ ...prev, services: prev.services.filter(s => s !== service) }));
+  };
 
   return (
     <CRMLayout>
@@ -37,13 +69,22 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Nome da Agência / Operação</Label>
-                <Input defaultValue={config.operationName} className="bg-secondary" />
+                <Input 
+                  value={localConfig.operationName} 
+                  onChange={(e) => setLocalConfig(prev => ({ ...prev, operationName: e.target.value }))}
+                  className="bg-secondary" 
+                />
               </div>
               <div className="space-y-2">
                 <Label>Valor Padrão de Serviço (R$)</Label>
-                <Input type="number" defaultValue={config.defaultServiceValue} className="bg-secondary" />
+                <Input 
+                  type="number" 
+                  value={localConfig.defaultServiceValue} 
+                  onChange={(e) => setLocalConfig(prev => ({ ...prev, defaultServiceValue: parseFloat(e.target.value) }))}
+                  className="bg-secondary" 
+                />
               </div>
-              <Button className="w-full bg-primary text-white">Salvar Alterações</Button>
+              <Button onClick={handleSave} className="w-full bg-primary text-white">Salvar Alterações</Button>
             </CardContent>
           </Card>
 
@@ -51,20 +92,23 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Target className="w-5 h-5 text-primary" />
-                Niches
+                Nichos
               </CardTitle>
-              <CardDescription>Mercados que você costuma abordar.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Input placeholder="Adicionar nicho..." className="bg-secondary" />
-                <Button size="icon"><Plus className="w-4 h-4" /></Button>
+                <Input id="new-niche" placeholder="Adicionar nicho..." className="bg-secondary" onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    addNiche(e.currentTarget.value);
+                    e.currentTarget.value = '';
+                  }
+                }} />
               </div>
               <div className="flex flex-wrap gap-2">
-                {config.niches.map(n => (
+                {localConfig.niches.map(n => (
                   <Badge key={n} variant="secondary" className="pl-3 pr-1 py-1 gap-2 border border-border">
                     {n}
-                    <Button variant="ghost" size="icon" className="w-4 h-4 p-0 text-muted-foreground hover:text-red-500">
+                    <Button variant="ghost" size="icon" className="w-4 h-4 p-0 text-muted-foreground hover:text-red-500" onClick={() => removeNiche(n)}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </Badge>
@@ -82,14 +126,18 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Input placeholder="Adicionar serviço..." className="bg-secondary" />
-                <Button size="icon"><Plus className="w-4 h-4" /></Button>
+                <Input placeholder="Adicionar serviço..." className="bg-secondary" onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    addService(e.currentTarget.value);
+                    e.currentTarget.value = '';
+                  }
+                }} />
               </div>
               <div className="flex flex-col gap-2">
-                {config.services.map(s => (
+                {localConfig.services.map(s => (
                   <div key={s} className="flex items-center justify-between p-2 rounded-lg bg-secondary border border-border">
                     <span className="text-sm">{s}</span>
-                    <Button variant="ghost" size="icon" className="w-6 h-6 text-muted-foreground hover:text-red-500">
+                    <Button variant="ghost" size="icon" className="w-6 h-6 text-muted-foreground hover:text-red-500" onClick={() => removeService(s)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -100,14 +148,5 @@ export default function SettingsPage() {
         </div>
       </div>
     </CRMLayout>
-  );
-}
-
-// Minimal Badge helper locally since types are dynamic here
-function Badge({ children, variant, className }: any) {
-  return (
-    <div className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${className}`}>
-      {children}
-    </div>
   );
 }
