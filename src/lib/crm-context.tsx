@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { Lead, Meeting, Sale, OperationConfig } from './types';
 import { addDays, parseISO } from 'date-fns';
 import { useFirestore, useCollection, useDoc, useUser } from '@/firebase';
@@ -28,6 +28,13 @@ const CRMContext = createContext<CRMContextType | undefined>(undefined);
 export function CRMProvider({ children }: { children: React.ReactNode }) {
   const db = useFirestore();
   const { user } = useUser();
+  const [safetyTimeoutReached, setSafetyTimeoutReached] = useState(false);
+
+  // Timeout para o progresso de carregamento dos dados
+  useEffect(() => {
+    const id = setTimeout(() => setSafetyTimeoutReached(true), 15000);
+    return () => clearTimeout(id);
+  }, []);
 
   const leadsQuery = useMemo(() => user && db ? query(collection(db, 'leads'), orderBy('createdAt', 'desc')) : null, [db, user]);
   const meetingsQuery = useMemo(() => user && db ? query(collection(db, 'meetings'), orderBy('scheduledAt', 'desc')) : null, [db, user]);
@@ -170,10 +177,12 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     setDoc(configRef, newConfig);
   };
 
+  const isLoading = !safetyTimeoutReached && (loadingLeads || loadingMeetings || loadingSales || loadingConfig) && !!db;
+
   return (
     <CRMContext.Provider value={{ 
       leads, meetings, sales, config, 
-      isLoading: (loadingLeads || loadingMeetings || loadingSales || loadingConfig) && !!db,
+      isLoading,
       addLead, updateLead, bulkAddLeads, 
       markFollowUpDone, updateMeeting, closeSale,
       saveConfig
