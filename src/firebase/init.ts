@@ -15,10 +15,14 @@ export function initializeFirebase(): {
   auth: Auth | null;
   isConfigured: boolean;
 } {
-  const isConfigured = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== "undefined");
+  // Verifica se a API Key está presente e não é uma string vazia ou "undefined"
+  const isConfigured = !!(
+    firebaseConfig.apiKey && 
+    firebaseConfig.apiKey !== "undefined" && 
+    firebaseConfig.apiKey.trim() !== ""
+  );
 
   if (!isConfigured) {
-    console.warn("Firebase configuration is missing or invalid. Check your environment variables.");
     return { firebaseApp: null, firestore: null, auth: null, isConfigured: false };
   }
 
