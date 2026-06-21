@@ -40,7 +40,6 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(id);
   }, []);
 
-  // Consultas ao Firestore - Fonte de verdade única
   const leadsQuery = useMemo(() => {
     if (!user || !db) return null;
     return query(collection(db, 'leads'));
@@ -59,7 +58,6 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     const firstError = errorLeads || errorMeetings || errorSales || errorConfig;
     if (firstError) {
       setDbError(firstError.message);
-      console.error('CRM Firestore Sync Error:', firstError);
     }
   }, [errorLeads, errorMeetings, errorSales, errorConfig]);
 
@@ -93,14 +91,10 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addLead = (newLeadData: any) => {
-    if (!db || !user) {
-      console.error('Tentativa de salvar lead sem autenticação ou banco.');
-      return;
-    }
+    if (!db || !user) return;
     
     const leadsCollection = collection(db, 'leads');
     const now = new Date().toISOString();
-    
     const data = {
       ...newLeadData,
       createdAt: now,
@@ -109,11 +103,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
       nextFollowUpAt: calculateNextFollowUp(0, newLeadData.sentAt || now),
     };
 
-    console.log('Firestore: Salvando novo lead...');
-    addDoc(leadsCollection, data).then((docRef) => {
-      console.log('Firestore: Lead salvo com ID:', docRef.id);
-    }).catch(async (e) => {
-      console.error('Firestore Error:', e);
+    addDoc(leadsCollection, data).catch(async () => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: leadsCollection.path, 
         operation: 'create', 
@@ -126,8 +116,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     if (!db || !user) return;
     const leadRef = doc(db, 'leads', id);
     
-    console.log(`Firestore: Atualizando lead ${id}...`);
-    updateDoc(leadRef, { ...updates, updatedAt: serverTimestamp() as any }).catch(async (e) => {
+    updateDoc(leadRef, { ...updates, updatedAt: serverTimestamp() as any }).catch(async () => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: leadRef.path, 
         operation: 'update', 
@@ -144,7 +133,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
         notes: '',
         potentialValue: updates.potentialValue || config.defaultServiceValue
       };
-      addDoc(meetingsCollection, mData).catch(async (e) => {
+      addDoc(meetingsCollection, mData).catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ 
           path: meetingsCollection.path, 
           operation: 'create', 
@@ -159,7 +148,6 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     const batch = writeBatch(db);
     const now = new Date().toISOString();
 
-    console.log(`Firestore: Iniciando importação em lote de ${newLeadsData.length} leads...`);
     newLeadsData.forEach(data => {
       const leadRef = doc(collection(db, 'leads'));
       const leadData = {
@@ -172,9 +160,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
       batch.set(leadRef, leadData);
     });
 
-    batch.commit().then(() => {
-      console.log('Firestore: Importação concluída.');
-    }).catch(async (e) => {
+    batch.commit().catch(async () => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: 'leads', 
         operation: 'write',
@@ -199,7 +185,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
       updatedAt: serverTimestamp() as any
     };
 
-    updateDoc(leadRef, updates).catch(async (e) => {
+    updateDoc(leadRef, updates).catch(async () => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: leadRef.path, 
         operation: 'update', 
@@ -211,7 +197,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   const updateMeeting = (meetingId: string, updates: Partial<Meeting>) => {
     if (!db || !user) return;
     const meetingRef = doc(db, 'meetings', meetingId);
-    updateDoc(meetingRef, { ...updates, updatedAt: serverTimestamp() as any }).catch(async (e) => {
+    updateDoc(meetingRef, { ...updates, updatedAt: serverTimestamp() as any }).catch(async () => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: meetingRef.path, 
         operation: 'update', 
@@ -229,14 +215,13 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     if (!db || !user) return;
     const salesCollection = collection(db, 'sales');
     const now = new Date().toISOString();
-    
     const data = {
       ...saleData,
       leadId: leadId,
       soldAt: now,
     };
 
-    addDoc(salesCollection, data).catch(async (e) => {
+    addDoc(salesCollection, data).catch(async () => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: salesCollection.path, 
         operation: 'create', 
@@ -250,7 +235,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
   const saveConfig = (newConfig: OperationConfig) => {
     if (!db || !user) return;
     const configRef = doc(db, 'config', 'main');
-    setDoc(configRef, newConfig).catch(async (e) => {
+    setDoc(configRef, newConfig).catch(async () => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ 
         path: configRef.path, 
         operation: 'write', 
@@ -259,7 +244,7 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const isLoading = !safetyTimeoutReached && (loadingLeads || loadingMeetings || loadingSales || loadingConfig) && !!db;
+  const isLoading = !safetyTimeoutReached && (loadingLeads || loadingMeetings || loadingConfig) && !!db;
   const isFirestoreConnected = !!db && !!user && !dbError;
 
   return (

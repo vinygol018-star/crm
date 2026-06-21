@@ -1,26 +1,20 @@
+
 'use client';
 
 import { useEffect } from 'react';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { useToast } from '@/hooks/use-toast';
 
 /**
  * Componente ouvinte central de erros de permissão do Firebase.
- * Exibe um toast quando uma operação é negada pelas Security Rules.
+ * Quando um erro de permissão contextual é emitido, este componente o lança como uma exceção
+ * para que possa ser capturado pelo sistema de depuração e exibido no overlay de desenvolvimento.
  */
 export default function FirebaseErrorListener() {
-  const { toast } = useToast();
-
   useEffect(() => {
     const handlePermissionError = (error: any) => {
-      // Log centralizado para depuração em desenvolvimento
-      console.error('Firebase Permission Error:', error);
-      
-      toast({
-        variant: 'destructive',
-        title: 'Erro de Permissão',
-        description: error.message || 'Você não tem permissão para realizar esta ação.',
-      });
+      // Lança o erro para ser capturado pelo overlay de erro do Next.js
+      // Isso fornece o feedback contextual necessário para depurar as Security Rules.
+      throw error;
     };
 
     errorEmitter.on('permission-error', handlePermissionError);
@@ -28,7 +22,7 @@ export default function FirebaseErrorListener() {
     return () => {
       errorEmitter.off('permission-error', handlePermissionError);
     };
-  }, [toast]);
+  }, []);
 
   return null;
 }
