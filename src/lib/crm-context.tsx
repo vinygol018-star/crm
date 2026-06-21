@@ -1,12 +1,13 @@
+
 "use client";
 
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { Lead, Meeting, Sale, OperationConfig } from './types';
 import { addDays, parseISO } from 'date-fns';
 import { useFirestore, useCollection, useDoc, useUser } from '@/firebase';
-import { collection, doc, setDoc, updateDoc, writeBatch, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, writeBatch, query, addDoc, onSnapshot } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 interface CRMContextType {
   leads: Lead[];
@@ -36,15 +37,35 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(id);
   }, []);
 
-  const leadsQuery = useMemo(() => user && db ? query(collection(db, 'leads'), orderBy('createdAt', 'desc')) : null, [db, user]);
-  const meetingsQuery = useMemo(() => user && db ? query(collection(db, 'meetings'), orderBy('scheduledAt', 'desc')) : null, [db, user]);
-  const salesQuery = useMemo(() => user && db ? query(collection(db, 'sales'), orderBy('soldAt', 'desc')) : null, [db, user]);
+  // Consultas ao Firestore - Fonte de verdade única e em tempo real
+  const leadsQuery = useMemo(() => {
+    if (!user || !db) return null;
+    console.log('CRM: Conectando à coleção de leads...');
+    return query(collection(db, 'leads'));
+  }, [db, user]);
+
+  const meetingsQuery = useMemo(() => user && db ? query(collection(db, 'meetings')) : null, [db, user]);
+  const salesQuery = useMemo(() => user && db ? query(collection(db, 'sales')) : null, [db, user]);
   const configDocRef = useMemo(() => user && db ? doc(db, 'config', 'main') : null, [db, user]);
 
-  const { data: leads = [], loading: loadingLeads } = useCollection<Lead>(leadsQuery);
-  const { data: meetings = [], loading: loadingMeetings } = useCollection<Meeting>(meetingsQuery);
-  const { data: sales = [], loading: loadingSales } = useCollection<Sale>(salesQuery);
+  const { data: rawLeads = [], loading: loadingLeads } = useCollection<Lead>(leadsQuery);
+  const { data: rawMeetings = [], loading: loadingMeetings } = useCollection<Meeting>(meetingsQuery);
+  const { data: rawSales = [], loading: loadingSales } = useCollection<Sale>(salesQuery);
   const { data: configDoc, loading: loadingConfig } = useDoc<OperationConfig>(configDocRef);
+
+  // Ordenação manual dos leads por data de criação no cliente para garantir exibição consistente
+  // sem depender de índices complexos do Firestore que podem falhar se campos estiverem ausentes.
+  const leads = useMemo(() => {
+    console.log(`CRM: ${rawLeads.length} leads sincronizados do Firestore.`);
+    return [...rawLeads].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [rawLeads]);
+
+  const meetings = useMemo(() => [...rawMeetings], [rawMeetings]);
+  const sales = useMemo(() => [...rawSales], [rawSales]);
 
   const config: OperationConfig = configDoc || {
     services: ['Gestão de Tráfego', 'Social Media', 'Site/LP', 'Copywriting', 'Automação', 'CRM'],
@@ -66,21 +87,26 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
 
   const addLead = (newLeadData: any) => {
     if (!db) return;
-    const leadId = Math.random().toString(36).substr(2, 9);
-    const leadRef = doc(db, 'leads', leadId);
+    const leadsCollection = collection(db, 'leads');
     const now = new Date().toISOString();
     
+    // Usamos addDoc para garantir persistência real no Firestore com ID automático
     const data = {
       ...newLeadData,
-      id: leadId,
       createdAt: now,
       status: 'Mensagem enviada',
       followUpLevel: 0,
       nextFollowUpAt: calculateNextFollowUp(0, newLeadData.sentAt || now),
     };
 
-    setDoc(leadRef, data).catch(async (e) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: leadRef.path, operation: 'create', requestResourceData: data }));
+    console.log('CRM: Salvando novo lead no Firestore...');
+    addDoc(leadsCollection, data).catch(async (e) => {
+      console.error('CRM: Falha ao salvar lead:', e);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+        path: leadsCollection.path, 
+        operation: 'create', 
+        requestResourceData: data 
+      }));
     });
   };
 
@@ -88,22 +114,32 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     if (!db) return;
     const leadRef = doc(db, 'leads', id);
     
-    updateDoc(leadRef, updates).catch(async (e) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: leadRef.path, operation: 'update', requestResourceData: updates }));
+    console.log(`CRM: Atualizando lead ${id} no Firestore...`);
+    updateDoc(leadRef, { ...updates, updatedAt: new Date().toISOString() }).catch(async (e) => {
+      console.error('CRM: Falha ao atualizar lead:', e);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+        path: leadRef.path, 
+        operation: 'update', 
+        requestResourceData: updates 
+      }));
     });
 
     if (updates.status === 'Reunião marcada') {
-      const meetingId = Math.random().toString(36).substr(2, 9);
-      const meetingRef = doc(db, 'meetings', meetingId);
+      const meetingsCollection = collection(db, 'meetings');
       const mData = {
-        id: meetingId,
         leadId: id,
         scheduledAt: new Date().toISOString(),
         status: 'Reunião marcada',
         notes: '',
         potentialValue: updates.potentialValue || config.defaultServiceValue
       };
-      setDoc(meetingRef, mData);
+      addDoc(meetingsCollection, mData).catch(async (e) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+          path: meetingsCollection.path, 
+          operation: 'create', 
+          requestResourceData: mData 
+        }));
+      });
     }
   };
 
@@ -112,20 +148,30 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     const batch = writeBatch(db);
     const now = new Date().toISOString();
 
+    console.log(`CRM: Iniciando importação de ${newLeadsData.length} leads no Firestore...`);
     newLeadsData.forEach(data => {
-      const leadId = Math.random().toString(36).substr(2, 9);
-      const leadRef = doc(db, 'leads', leadId);
-      batch.set(leadRef, {
+      const leadRef = doc(collection(db, 'leads'));
+      const leadData = {
         ...data,
-        id: leadId,
+        id: leadRef.id,
         createdAt: now,
         status: 'Mensagem enviada',
         followUpLevel: 0,
         nextFollowUpAt: calculateNextFollowUp(0, data.sentAt || now),
-      });
+      };
+      batch.set(leadRef, leadData);
     });
 
-    batch.commit();
+    batch.commit().then(() => {
+      console.log('CRM: Importação em massa concluída com sucesso.');
+    }).catch(async (e) => {
+      console.error('CRM: Erro na importação em massa:', e);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+        path: 'leads', 
+        operation: 'write',
+        requestResourceData: 'Bulk Import'
+      }));
+    });
   };
 
   const markFollowUpDone = (id: string) => {
@@ -137,17 +183,32 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
     const now = new Date().toISOString();
     const nextLevel = lead.followUpLevel + 1;
     
-    updateDoc(leadRef, {
+    const updates = {
       followUpLevel: nextLevel,
       lastFollowUpAt: now,
-      nextFollowUpAt: calculateNextFollowUp(nextLevel, now)
+      nextFollowUpAt: calculateNextFollowUp(nextLevel, now),
+      updatedAt: now
+    };
+
+    updateDoc(leadRef, updates).catch(async (e) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+        path: leadRef.path, 
+        operation: 'update', 
+        requestResourceData: updates 
+      }));
     });
   };
 
   const updateMeeting = (meetingId: string, updates: Partial<Meeting>) => {
     if (!db) return;
     const meetingRef = doc(db, 'meetings', meetingId);
-    updateDoc(meetingRef, updates);
+    updateDoc(meetingRef, updates).catch(async (e) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+        path: meetingRef.path, 
+        operation: 'update', 
+        requestResourceData: updates 
+      }));
+    });
 
     const meeting = meetings.find(m => m.id === meetingId);
     if (meeting && updates.status === 'Não vendido') {
@@ -157,24 +218,36 @@ export function CRMProvider({ children }: { children: React.ReactNode }) {
 
   const closeSale = (leadId: string, saleData: any) => {
     if (!db) return;
-    const saleId = Math.random().toString(36).substr(2, 9);
-    const saleRef = doc(db, 'sales', saleId);
+    const salesCollection = collection(db, 'sales');
+    const now = new Date().toISOString();
     
     const data = {
       ...saleData,
-      id: saleId,
       leadId: leadId,
-      soldAt: new Date().toISOString(),
+      soldAt: now,
     };
 
-    setDoc(saleRef, data);
+    addDoc(salesCollection, data).catch(async (e) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+        path: salesCollection.path, 
+        operation: 'create', 
+        requestResourceData: data 
+      }));
+    });
+
     updateLead(leadId, { status: 'Venda fechada' });
   };
 
   const saveConfig = (newConfig: OperationConfig) => {
     if (!db) return;
     const configRef = doc(db, 'config', 'main');
-    setDoc(configRef, newConfig);
+    setDoc(configRef, newConfig).catch(async (e) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+        path: configRef.path, 
+        operation: 'write', 
+        requestResourceData: newConfig 
+      }));
+    });
   };
 
   const isLoading = !safetyTimeoutReached && (loadingLeads || loadingMeetings || loadingSales || loadingConfig) && !!db;
